@@ -8,6 +8,7 @@ from tqdm import tqdm, trange
 from run_dnerf_helpers import *
 
 from load_blender import load_blender_data
+from load_shirt import load_shirt_data
 
 try:
     from apex import amp
@@ -629,6 +630,20 @@ def train():
 
         # images = [rgb2hsv(img) for img in images]
 
+    elif args.dataset_type == 'shirt':
+        images, poses, times, render_poses, render_times, hwf, i_split, near, far = load_shirt_data(args.datadir, args.half_res)
+        print('Loaded shirt dataset', images.shape, render_poses.shape, hwf, args.datadir)
+
+        i_train, i_val, i_test = i_split
+
+        # TODO: Nearest and furthest distance?
+        # near = 2.
+        # far = 6.
+
+        if args.white_bkgd:
+            images = images[...,:3]*images[...,-1:] + (1.-images[...,-1:])
+        else:
+            images = images[...,:3]
     else:
         print('Unknown dataset type', args.dataset_type, 'exiting')
         return
@@ -691,7 +706,7 @@ def train():
             print('test poses shape', render_poses.shape)
 
             rgbs, _ = render_path(render_poses, render_times, hwf, args.chunk, render_kwargs_test, gt_imgs=images,
-                                  savedir=testsavedir, render_factor=args.render_factor, save_also_gt=True)
+                                  savedir=testsavedir, render_factor=args.render_factor, save_also_gt=args.render_test)
             print('Done rendering', testsavedir)
             imageio.mimwrite(os.path.join(testsavedir, 'video.mp4'), to8b(rgbs), fps=30, quality=8)
 

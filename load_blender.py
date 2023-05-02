@@ -124,7 +124,7 @@ def load_blender_data(basedir, half_res=False, testskip=1):
             render_poses.append(np.array(frame['transform_matrix']))
         render_poses = np.array(render_poses).astype(np.float32)
     else:
-        render_poses = torch.stack([pose_spherical(angle, -30.0, 4.0) for angle in np.linspace(-180,180,40+1)[:-1]], 0)
+        render_poses = torch.stack([pose_spherical(angle, -30.0, 5.0) for angle in np.linspace(-90,90,40+1)[:-1]], 0)
     render_times = torch.linspace(0., 1., render_poses.shape[0])
     
     if half_res:
