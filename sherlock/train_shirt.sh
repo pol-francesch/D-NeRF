@@ -8,6 +8,7 @@
 #SBATCH -G 1
 #SBATCH -c 10
 #SBATCH --mem=16GB
+#SBATCH -C GPU_MEM:16GB
 
 module load gcc/9.1.0
 module load python/3.9.0
