@@ -15,6 +15,9 @@ def pose_from_rq(pos, quat):
         Allegedly: 
         https://stackoverflow.com/questions/695043/how-does-one-convert-world-coordinates-to-camera-coordinates
     '''
+    # Make quaternion be scalar last
+    quat = np.roll(quat, -1)
+    
     rot = Rotation.from_quat(quat).as_matrix()
     pose = np.vstack([np.hstack([rot, np.expand_dims(pos, axis=1)]), np.array([0,0,0,1])])
 
@@ -43,14 +46,16 @@ def load_shirt_data(datadir, half_res=False):
     far = 0
     for i, frame in enumerate(meta):
         # Only consider every 5 images and up to 190 images
-        if i % 5:
-            continue
-        elif i >= 190*5:
+        # if i % 5:
+        #     continue
+        # elif i >= 190*5:
+        #     break
+        # Only considering first 190 images
+        if i >= 190:
             break
 
         # Get image
         # TODO: Include setting for choosing which image set to use
-        # TODO: Is SHIRT grayscale??? Converting to RGB for now
         image_fname = os.path.join(datadir, "synthetic","images", frame["filename"])
         gray = imageio.imread(image_fname)
         rgb  = cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB).astype(np.float32) / 255.
