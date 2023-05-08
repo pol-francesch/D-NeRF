@@ -15,7 +15,13 @@ def pose_from_rq(pos, quat):
         Allegedly: 
         https://stackoverflow.com/questions/695043/how-does-one-convert-world-coordinates-to-camera-coordinates
     '''
+    # Change from scalar first to scalar last quaternion
+    rot = np.roll(quat, -1)
+
+    # Rotation matrix
     rot = Rotation.from_quat(quat).as_matrix()
+
+    # Pose
     pose = np.vstack([np.hstack([rot, np.expand_dims(pos, axis=1)]), np.array([0,0,0,1])])
 
     distance = np.linalg.norm(pos)
@@ -68,7 +74,6 @@ def load_shirt_data(datadir, half_res=False):
     # Re-organize data
     # imgs = (np.array(imgs) / 255.).astype(np.float32)  # keep all 4 channels (RGBA)
     imgs = np.array(imgs)
-    poses = np.array(poses).astype(np.float32)
     
     # Camera parameters
     H, W = imgs[0].shape[:2]
@@ -86,6 +91,10 @@ def load_shirt_data(datadir, half_res=False):
     else:
         render_poses = torch.stack([pose_spherical(angle, -30.0, 6.0) for angle in np.linspace(-90,90,40+1)[:-1]], 0)
     render_times = torch.linspace(0., 1., render_poses.shape[0])
+
+    # Test of the render_poses
+    # render_poses = np.repeat(poses[0][:, :, np.newaxis], 20, axis=2)
+    # render_times = torch.linspace(0., 1., render_poses.shape[0])
 
     # Half res work
     if half_res:
