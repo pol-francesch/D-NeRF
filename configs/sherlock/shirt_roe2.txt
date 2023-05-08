@@ -1,6 +1,6 @@
 expname = shirt_roe2
-basedir = $SCRATCH/D-NeRF/logs
-datadir = $SCRATCH/D-NeRF/data/shirtv1/roe2
+basedir = /scratch/users/pfrances/D-NeRF/logs
+datadir = /scratch/users/pfrances/D-NeRF/data/shirtv1/roe2
 dataset_type = shirt
 
 nerf_type = direct_temporal

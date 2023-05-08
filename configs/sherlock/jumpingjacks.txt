@@ -1,6 +1,6 @@
 expname = jumpingjacks
-basedir = $SCRATCH/D-NeRF/logs
-datadir = $SCRATCH/D-NeRF/data/jumpingjacks
+basedir = /scratch/users/pfrances/D-NeRF/logs
+datadir = /scratch/users/pfrances/D-NeRF/data/jumpingjacks
 dataset_type = blender
 
 nerf_type = direct_temporal
