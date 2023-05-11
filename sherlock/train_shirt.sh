@@ -13,7 +13,10 @@
 module reset
 module load py-pytorch/2.0 py-torchvision/0.15.1_py39
 module load py-matplotlib/3.7.1_py39
+
 cd $HOME
-source $HOME/python_envs/dnerf/bin/activate
+source $HOME/python_envs/dnerfenv/bin/activate
+
+which python
 
 python $HOME/D-NeRF/run_dnerf.py --config $HOME/D-NeRF/configs/sherlock/shirt_roe2.txt
