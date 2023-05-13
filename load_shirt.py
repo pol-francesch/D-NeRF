@@ -97,6 +97,7 @@ def load_shirt_data(datadir, half_res=False):
     # Test of the render_poses
     # render_poses = np.repeat(poses[0][:, :, np.newaxis], 20, axis=2)
     # render_times = torch.linspace(0., 1., render_poses.shape[0])
+    render_poses = torch.stack([torch.Tensor(poses[0]) for _ in range(40)])
 
     # Half res work
     if half_res:

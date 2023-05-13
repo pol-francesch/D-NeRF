@@ -127,6 +127,8 @@ def load_blender_data(basedir, half_res=False, testskip=1):
         render_poses = torch.stack([pose_spherical(angle, -30.0, 5.0) for angle in np.linspace(-90,90,40+1)[:-1]], 0)
     render_times = torch.linspace(0., 1., render_poses.shape[0])
     
+    render_poses = torch.stack([torch.Tensor(poses[0]) for _ in range(40)])
+
     if half_res:
         H = H//2
         W = W//2
