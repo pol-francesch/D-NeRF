@@ -8,7 +8,7 @@ from tqdm import tqdm, trange
 from run_dnerf_helpers import *
 
 from load_blender import load_blender_data
-from load_shirt import load_shirt_data
+from load_shirt import load_shirt_data, load_instant_ngp_data
 
 try:
     from apex import amp
@@ -632,6 +632,20 @@ def train():
 
     elif args.dataset_type == 'shirt':
         images, poses, times, render_poses, render_times, hwf, i_split, near, far = load_shirt_data(args.datadir, args.half_res)
+        print('Loaded shirt dataset', images.shape, render_poses.shape, hwf, args.datadir)
+
+        i_train, i_val, i_test = i_split
+
+        # TODO: Nearest and furthest distance?
+        # near = 2.
+        # far = 6.
+
+        if args.white_bkgd:
+            images = images[...,:3]*images[...,-1:] + (1.-images[...,-1:])
+        else:
+            images = images[...,:3]
+    elif args.dataset_type == 'instant_ngp':
+        images, poses, times, render_poses, render_times, hwf, i_split, near, far = load_instant_ngp_data(args.datadir, args.half_res)
         print('Loaded shirt dataset', images.shape, render_poses.shape, hwf, args.datadir)
 
         i_train, i_val, i_test = i_split

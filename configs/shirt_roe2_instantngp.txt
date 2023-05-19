@@ -1,7 +1,7 @@
-expname = shirt_roe2_abs
-basedir = /scratch/users/pfrances/D-NeRF/logs
-datadir = /scratch/users/pfrances/D-NeRF/data/shirtv1/roe2
-dataset_type = shirt
+expname = shirt_roe2_colmap
+basedir = ./logs
+datadir = ./data/shirtv1/instant_ngp_roe2
+dataset_type = instant_ngp
 
 nerf_type = direct_temporal
 no_batching = True
