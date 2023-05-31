@@ -128,9 +128,9 @@ def get_frame_transforms(roe_json_fp, metadata_json_fp, img_dir):
         meta = json.load(f)
 
     # Get rotation & translation from servicer principal to camera axes
-    r_pri2cam_pri = meta["pMdl"]["x1"]["r_pri2cam_pri"]
-    q_pri2cam     = meta["pMdl"]["x1"]["q_pri2cam"]
-    R_pri2cam     = qvec2rotmat(q_pri2cam)
+    r_spri2cam_spri = meta["pMdl"]["x1"]["r_pri2cam_pri"]
+    q_spri2cam     = meta["pMdl"]["x1"]["q_pri2cam"]
+    R_spri2cam     = qvec2rotmat(q_spri2cam)
 
     # Get data for each frame
     frames = []
@@ -148,17 +148,18 @@ def get_frame_transforms(roe_json_fp, metadata_json_fp, img_dir):
         sharp = sharpness(img_fname)
 
         # Target pose in servicer principal frame
-        tvec = np.array(rv[0:3])
-        qvec = np.array(qvec)
-        R    = qvec2rotmat(qvec)
+        r_scom2tcom_spri = np.array(rv[0:3])
+        q_spri2tpri = np.array(qvec)
+        R_spri2tpri = qvec2rotmat(q_spri2tpri)
 
         # Target pose in servicer camera frame
-        tvec = R_pri2cam@(tvec + r_pri2cam_pri)
-        R    = R@R_pri2cam
+        r_cam2tcom_cam = R_spri2cam@(r_scom2tcom_spri - r_spri2cam_spri)
+        R_cam2tpri = R_spri2cam.T@R_spri2tpri
+        # R_cam2tpri = R_spri2tpri@R_spri2cam.T
 
         # World to camera matrix
-        tvec = tvec.reshape([3,1])
-        m = np.concatenate([np.concatenate([R, tvec], 1), bottom], 0)
+        tvec = r_cam2tcom_cam.reshape([3,1])
+        m = np.concatenate([np.concatenate([R_cam2tpri.T, tvec], 1), bottom], 0)
 
         # Get camera to world matrix
         c2w = np.linalg.inv(m)
@@ -343,13 +344,128 @@ def get_frame_transforms2(roe_json_fp, metadata_json_fp, img_dir):
 
     return frames
 
+def get_frame_transforms_eci(roe_json_fp, metadata_json_fp, img_dir):
+    # Load JSON
+    with open(roe_json_fp, 'r') as f:
+        roe = json.load(f)
+    
+    with open(metadata_json_fp, "r") as f:
+        meta = json.load(f)
+
+    # Get rotation & translation from servicer principal to camera axes
+    r_spri2cam_spri = meta["pMdl"]["x1"]["r_pri2cam_pri"]
+    q_spri2cam     = meta["pMdl"]["x1"]["q_pri2cam"]
+    R_spri2cam     = qvec2rotmat(q_spri2cam)
+
+    # Get data for each frame
+    frames = []
+    bottom = np.array([0.0, 0.0, 0.0, 1.0]).reshape([1, 4])
+    up = np.zeros(3)
+    use_colmap_coords = False
+
+    for idx, (frame, rv, qvec) in enumerate(zip(roe, meta["sAbsState"]["rv_eci2com_eci"], meta["sAbsState"]["q_eci2pri"])):
+        # Only take first 190 images
+        if idx > 180:
+            break
+
+        # Image sharpness
+        img_fname = os.path.join(img_dir, frame["filename"])
+        sharp = sharpness(img_fname)
+
+        # Servicer pose in ECI frame
+        r_eci2scom_eci = np.array(rv[0:3])
+        q_eci2spri = np.array(qvec)
+        R_eci2spri = qvec2rotmat(q_eci2spri)
+
+        # Camera pose in ECI frame
+        r_eci2cam_eci = r_eci2scom_eci - R_eci2spri.T@r_spri2cam_spri
+        R_cam2eci     = (R_eci2spri@R_spri2cam).T
+
+        # ECI to camera matrix
+        tvec = -r_eci2cam_eci.reshape([3,1])
+        m = np.concatenate([np.concatenate([R_cam2eci.T, tvec], 1), bottom], 0)
+
+        # Get camera to world matrix
+        c2w = np.linalg.inv(m)
+        if not use_colmap_coords:
+            c2w[0:3,2] *= -1 # flip the y and z axis
+            c2w[0:3,1] *= -1
+            c2w = c2w[[1,0,2,3],:]
+            c2w[2,:] *= -1 # flip whole world upside down
+
+            up += c2w[0:3,1]
+        
+        # Append results
+        frames.append({
+            "file_path": os.path.join("images/", frame["filename"]),
+            "sharpness": sharp,
+            "transform_matrix": c2w
+        })
+    
+    # Stolen from intant-ngp/colmap2nerf.py
+    nframes = len(frames)
+    if use_colmap_coords:
+        flip_mat = np.array([
+            [1, 0, 0, 0],
+            [0, -1, 0, 0],
+            [0, 0, -1, 0],
+            [0, 0, 0, 1]
+        ])
+
+        for f in frames:
+            f["transform_matrix"] = np.matmul(f["transform_matrix"], flip_mat) # flip cameras (it just works)
+    else:
+        # don't keep colmap coords - reorient the scene to be easier to work with
+
+        up = up / np.linalg.norm(up)
+        print("up vector was", up)
+        R = rotmat(up,[0,0,1]) # rotate up vector to [0,0,1]
+        R = np.pad(R,[0,1])
+        R[-1, -1] = 1
+
+        for f in frames:
+            f["transform_matrix"] = np.matmul(R, f["transform_matrix"]) # rotate up to be the z axis
+
+        # find a central point they are all looking at
+        print("computing center of attention...")
+        totw = 0.0
+        totp = np.array([0.0, 0.0, 0.0])
+        for f in frames:
+            mf = f["transform_matrix"][0:3,:]
+            for g in frames:
+                mg = g["transform_matrix"][0:3,:]
+                p, w = closest_point_2_lines(mf[:,3], mf[:,2], mg[:,3], mg[:,2])
+                if w > 0.00001:
+                    totp += p*w
+                    totw += w
+        if totw > 0.0:
+            totp /= totw
+        print(totp) # the cameras are looking at totp
+        for f in frames:
+            f["transform_matrix"][0:3,3] -= totp
+
+        avglen = 0.
+        for f in frames:
+            avglen += np.linalg.norm(f["transform_matrix"][0:3,3])
+        avglen /= nframes
+        print("avg camera distance from origin", avglen)
+        for f in frames:
+            f["transform_matrix"][0:3,3] *= 4.0 / avglen # scale to "nerf sized"
+
+    # To list so they can be stored as a JSON
+    for f in frames:
+        f["transform_matrix"] = f["transform_matrix"].tolist()
+
+    return frames
+
 def shirt_json_2_instant_ngp_json(camera_json_fp, metadata_json_fp, roe_json_fp, img_dir, aabb_scale):
     '''
         Gets the relevant JSON's and transforms then to the
         format expect by intant NGP
     '''
     camera_json = get_camera_intrinsics(camera_json_fp, aabb_scale)
-    frames      = get_frame_transforms2(roe_json_fp, metadata_json_fp, img_dir)
+    frames      = get_frame_transforms(roe_json_fp, metadata_json_fp, img_dir)
+    # frames = get_frame_transforms_eci(roe_json_fp, metadata_json_fp, img_dir)
 
     out = camera_json
     out["frames"] = frames
@@ -361,10 +477,10 @@ if __name__ == "__main__":
     aabb_scale = 4
 
     camera_json_fp = '/home/pol/Documents/Stanford/stanford/AA290/D-NeRF/data/shirtv1/camera.json'
-    metadata_json_fp = '/home/pol/Documents/Stanford/stanford/AA290/D-NeRF/data/shirtv1/roe2/metadata.json'
-    roe_json_fp = '/home/pol/Documents/Stanford/stanford/AA290/D-NeRF/data/shirtv1/roe2/roe2.json'
-    img_dir     = '/home/pol/Documents/Stanford/stanford/AA290/D-NeRF/data/shirtv1/roe2/synthetic/images'
-    save_fp = '/home/pol/Documents/Stanford/stanford/AA290/D-NeRF/data/shirtv1/roe2/synthetic/transforms.json'
+    metadata_json_fp = '/home/pol/Documents/Stanford/stanford/AA290/D-NeRF/data/shirtv1/roe1/metadata.json'
+    roe_json_fp = '/home/pol/Documents/Stanford/stanford/AA290/D-NeRF/data/shirtv1/roe1/roe1.json'
+    img_dir     = '/home/pol/Documents/Stanford/stanford/AA290/D-NeRF/data/shirtv1/roe1/synthetic/images'
+    save_fp = '/home/pol/Documents/Stanford/stanford/AA290/D-NeRF/data/shirtv1/roe1/synthetic/transforms.json'
 
     transforms = shirt_json_2_instant_ngp_json(camera_json_fp, metadata_json_fp, roe_json_fp, img_dir, aabb_scale)
 
