@@ -2,7 +2,7 @@
 #SBATCH --job-name=train_shirt_roe1_instant_ngp
 #SBATCH --output=train_shirt_roe1_instant_ngp.%j.out
 #SBATCH --error=train_shirt_roe1_instant_ngp.%j.err
-#SBATCH --time=28:00:00
+#SBATCH --time=48:00:00
 #SBATCH --ntasks=1
 #SBATCH -p gpu
 #SBATCH -G 1
