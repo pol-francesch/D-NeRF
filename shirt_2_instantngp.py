@@ -130,13 +130,15 @@ def get_frame_transforms(roe_json_fp, metadata_json_fp, img_dir):
     # Get rotation & translation from servicer principal to camera axes
     r_spri2cam_spri = meta["pMdl"]["x1"]["r_pri2cam_pri"]
     q_spri2cam     = meta["pMdl"]["x1"]["q_pri2cam"]
+    # Note q_pri2cam = [1,0,0,0]
     R_spri2cam     = qvec2rotmat(q_spri2cam)
+    DCM_spri2cam   = R_spri2cam.T
 
     # Get data for each frame
     frames = []
     bottom = np.array([0.0, 0.0, 0.0, 1.0]).reshape([1, 4])
     up = np.zeros(3)
-    use_colmap_coords = False
+    use_colmap_coords = True
 
     for idx, (frame, rv, qvec) in enumerate(zip(roe, meta["tRelState"]["rv_scom2tcom_spri"], meta["tRelState"]["q_spri2tpri"])):
         # Only take first 190 images
@@ -151,15 +153,19 @@ def get_frame_transforms(roe_json_fp, metadata_json_fp, img_dir):
         r_scom2tcom_spri = np.array(rv[0:3])
         q_spri2tpri = np.array(qvec)
         R_spri2tpri = qvec2rotmat(q_spri2tpri)
+        DCM_spri2tpri = R_spri2tpri.T
 
         # Target pose in servicer camera frame
-        r_cam2tcom_cam = R_spri2cam@(r_scom2tcom_spri - r_spri2cam_spri)
-        R_cam2tpri = R_spri2cam.T@R_spri2tpri
-        # R_cam2tpri = R_spri2tpri@R_spri2cam.T
+        r_cam2tcom_cam = DCM_spri2cam@(r_scom2tcom_spri - r_spri2cam_spri)
+        # R_cam2tpri = R_spri2cam.T@R_spri2tpri
+        # Numerically confirmed R_cam2tpri = DCM_cam2tpri.T
+        R_cam2tpri = R_spri2tpri@R_spri2cam.T
+        DCM_cam2tpri = DCM_spri2tpri@DCM_spri2cam.T
 
         # World to camera matrix
         tvec = r_cam2tcom_cam.reshape([3,1])
-        m = np.concatenate([np.concatenate([R_cam2tpri.T, tvec], 1), bottom], 0)
+        m = np.concatenate([np.concatenate([R_cam2tpri, tvec], 1), bottom], 0)
+        # m = np.concatenate([np.concatenate([R_cam2tpri.T, tvec], 1), bottom], 0)
 
         # Get camera to world matrix
         c2w = np.linalg.inv(m)

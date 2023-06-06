@@ -170,7 +170,7 @@ def load_instant_ngp_data(datadir, half_res=False):
 
         # Get pose
         pose = np.array(frame["transform_matrix"])
-        distance = np.linalg.norm(pose[3, 0:3])
+        distance = np.linalg.norm(pose[0:3, 3])
         poses.append(np.array(pose))
 
         if near > distance:
@@ -181,6 +181,10 @@ def load_instant_ngp_data(datadir, half_res=False):
     # Re-organize data
     # imgs = (np.array(imgs) / 255.).astype(np.float32)  # keep all 4 channels (RGBA)
     image_ids, imgs, poses = zip(*sorted(zip(image_ids, imgs, poses)))
+
+    if near - far < 2.0:
+        near = 2.
+        far  = 10.
 
     imgs = np.array(imgs)
     poses = np.array(poses)
@@ -222,7 +226,7 @@ def load_instant_ngp_data(datadir, half_res=False):
         imgs = imgs_half_res
     
     # Build i_split
-    all_idxs = np.arange(0, 150, 1)
+    all_idxs = np.arange(0, 190, 1)
 
     val_idxs  = np.sort(np.random.choice(all_idxs, 20, replace=False))
     all_idxs  = [i for i in all_idxs if i not in val_idxs]
@@ -232,7 +236,7 @@ def load_instant_ngp_data(datadir, half_res=False):
     i_split = [train_idxs, val_idxs, test_idxs]
 
     # Build normalized times
-    train_times = np.linspace(0,1,110)
+    train_times = np.linspace(0,1,150)
     val_times   = np.linspace(0,1,20)
     test_times  = np.linspace(0,1,20)
 
