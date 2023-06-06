@@ -29,6 +29,22 @@ def pose_from_rq(pos, quat):
 
     return pose, distance
 
+def qvec2rotmat(qvec):
+    return np.array([
+        [
+            1 - 2 * qvec[2]**2 - 2 * qvec[3]**2,
+            2 * qvec[1] * qvec[2] - 2 * qvec[0] * qvec[3],
+            2 * qvec[3] * qvec[1] + 2 * qvec[0] * qvec[2]
+        ], [
+            2 * qvec[1] * qvec[2] + 2 * qvec[0] * qvec[3],
+            1 - 2 * qvec[1]**2 - 2 * qvec[3]**2,
+            2 * qvec[2] * qvec[3] - 2 * qvec[0] * qvec[1]
+        ], [
+            2 * qvec[3] * qvec[1] - 2 * qvec[0] * qvec[2],
+            2 * qvec[2] * qvec[3] + 2 * qvec[0] * qvec[1],
+            1 - 2 * qvec[1]**2 - 2 * qvec[2]**2
+        ]
+    ])
 
 def load_shirt_data(datadir, half_res=False):
     # Load in all needed images and the relevant information
@@ -47,6 +63,15 @@ def load_shirt_data(datadir, half_res=False):
     
     with open(os.path.join(datadir, 'metadata.json'), 'r') as f:
         meta = json.load(f)
+
+    # Get rotation & translation from servicer principal to camera axes
+    r_spri2cam_spri = meta["pMdl"]["x1"]["r_pri2cam_pri"]
+    q_spri2cam     = meta["pMdl"]["x1"]["q_pri2cam"]
+    # Note q_pri2cam = [1,0,0,0]
+    R_spri2cam     = qvec2rotmat(q_spri2cam)
+    DCM_spri2cam   = R_spri2cam.T
+
+    bottom = np.array([0.0, 0.0, 0.0, 1.0]).reshape([1, 4])
 
     # Get data from JSON
     near = np.inf
@@ -68,9 +93,40 @@ def load_shirt_data(datadir, half_res=False):
         rgb  = cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB).astype(np.float32) / 255.
         imgs.append(rgb)
 
+        # Chaser pose in ECI frame
+        r_eci2scom_eci = np.array(rv[0:3])
+        q_eci2spri = np.array(qvec)
+        R_eci2spri = qvec2rotmat(q_eci2spri)
+        DCM_eci2spri = R_eci2spri.T
+
+        # Camera pose in ECI frame
+        r_eci2cam_eci = r_eci2scom_eci - DCM_eci2spri.T@r_spri2cam_spri
+        DCM_eci2cam   = DCM_spri2cam@DCM_eci2spri
+
+        r_cam2eci_cam = -DCM_eci2cam@r_eci2cam_eci 
+        R_cam2eci     = R_eci2spri.T@R_spri2cam.T
+
+        # World to camera matrix
+        tvec = r_cam2eci_cam.reshape([3,1])
+        m = np.concatenate([np.concatenate([R_cam2eci, tvec], 1), bottom], 0)
+
+        # Get camera to world matrix
+        c2w = np.linalg.inv(m)
+
+        flip_mat = np.array([
+            [1, 0, 0, 0],
+            [0, -1, 0, 0],
+            [0, 0, -1, 0],
+            [0, 0, 0, 1]
+        ])
+
+        pose = c2w @ flip_mat
+
         # Get pose
-        pose, distance = pose_from_rq(np.array(rv[0:3]), np.array(qvec))
+        # pose, distance = pose_from_rq(np.array(rv[0:3]), np.array(qvec))
         poses.append(np.array(pose))
+
+        distance = np.linalg.norm(pose[0:3, 3])
 
         if near > distance:
             near = distance
