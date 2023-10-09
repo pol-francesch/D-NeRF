@@ -142,7 +142,7 @@ def get_frame_transforms(roe_json_fp, metadata_json_fp, img_dir):
 
     for idx, (frame, rv, qvec) in enumerate(zip(roe, meta["tRelState"]["rv_scom2tcom_spri"], meta["tRelState"]["q_spri2tpri"])):
         # Only take first 190 images
-        if idx > 180:
+        if idx > 190:
             break
 
         # Image sharpness
